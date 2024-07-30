@@ -8,7 +8,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-clack-extensions = { git = "https://github.com/prokopyl/clack.git", version = "0.1.0", features = ["audio-ports", "clack-plugin", "note-ports"] }
+clack-extensions = { git = "https://github.com/prokopyl/clack.git", version = "0.1.0", features = ["audio-ports", "clack-plugin", "note-ports", "params", "state"] }
 clack-plugin = { git = "https://github.com/prokopyl/clack.git", version = "0.1.0" }
 
 [package.metadata.bundle]
