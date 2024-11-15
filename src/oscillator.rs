@@ -90,9 +90,8 @@ impl Oscillator for SineOscillator {
 
         for (left, right) in left.iter_mut().zip(right.iter_mut()) {
             for voice in &mut active_voices {
-                let sample = voice.next_sample(self.sample_rate)
-                    * voice.velocity
-                    * voice.adsr.process(self.sample_rate);
+                let gain = 10f32.powf(voice.velocity * voice.adsr.process(self.sample_rate) - 1.0);
+                let sample = voice.next_sample(self.sample_rate) * gain;
 
                 *left += sample;
                 *right += sample;
