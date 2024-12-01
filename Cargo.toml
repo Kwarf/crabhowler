@@ -1,5 +1,5 @@
 [package]
-name = "crabhowler"
+name = "wavy"
 description = "A simple synthetizer plugin"
 version = "0.1.0"
 edition = "2021"

@@ -42,8 +42,8 @@ impl DefaultPluginFactory for CrabHowler {
     fn get_descriptor() -> PluginDescriptor {
         use clack_plugin::plugin::features::*;
 
-        PluginDescriptor::new("com.kwarf.crabhowler", "Crab Howler")
-            .with_vendor("Kwarf")
+        PluginDescriptor::new("com.valentinvignal.wavy", "Wavy")
+            .with_vendor("Valentin Vignal")
             .with_features([INSTRUMENT, SYNTHESIZER, STEREO])
     }
 
