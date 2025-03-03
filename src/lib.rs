@@ -3,6 +3,7 @@ use clack_extensions::{
         AudioPortFlags, AudioPortInfo, AudioPortInfoWriter, AudioPortType, PluginAudioPorts,
         PluginAudioPortsImpl,
     },
+    gui::{GuiApiType, GuiConfiguration, PluginGui, PluginGuiImpl},
     note_ports::{
         NoteDialect, NoteDialects, NotePortInfo, NotePortInfoWriter, PluginNotePorts,
         PluginNotePortsImpl,
@@ -27,15 +28,18 @@ use clack_plugin::{
     utils::ClapId,
 };
 use envelope::Envelope;
+use gui::CrabHowlerGui;
 use oscillator::{Oscillator, SineOscillator};
+use raw_window_handle::HasRawWindowHandle;
 use std::{
     ffi::CStr,
     io::{Read, Write},
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 
 mod adsr;
 mod envelope;
+mod gui;
 mod oscillator;
 
 pub struct CrabHowler;
@@ -50,7 +54,8 @@ impl Plugin for CrabHowler {
             .register::<PluginAudioPorts>()
             .register::<PluginNotePorts>()
             .register::<PluginParams>()
-            .register::<PluginState>();
+            .register::<PluginState>()
+            .register::<PluginGui>();
     }
 }
 
@@ -71,7 +76,10 @@ impl DefaultPluginFactory for CrabHowler {
         host: HostMainThreadHandle<'a>,
         shared: &'a Self::Shared<'a>,
     ) -> Result<Self::MainThread<'a>, PluginError> {
-        Ok(Self::MainThread { shared })
+        Ok(Self::MainThread {
+            shared,
+            gui: CrabHowlerGui::default(),
+        })
     }
 }
 
@@ -179,13 +187,14 @@ impl<'a> PluginAudioProcessorParams for CrabHowlerAudioProcessor<'a> {
 
 #[derive(Default)]
 pub struct CrabHowlerShared {
-    envelope: RwLock<Envelope>,
+    envelope: Arc<RwLock<Envelope>>,
 }
 
 impl<'a> PluginShared<'a> for CrabHowlerShared {}
 
 pub struct CrabHowlerMainThread<'a> {
     shared: &'a CrabHowlerShared,
+    gui: CrabHowlerGui,
 }
 
 impl<'a> PluginMainThreadParams for CrabHowlerMainThread<'a> {
@@ -335,6 +344,64 @@ impl<'a> PluginNotePortsImpl for CrabHowlerMainThread<'a> {
                 supported_dialects: NoteDialects::CLAP,
             })
         }
+    }
+}
+
+impl<'a> PluginGuiImpl for CrabHowlerMainThread<'a> {
+    fn is_api_supported(&mut self, configuration: clack_extensions::gui::GuiConfiguration) -> bool {
+        configuration.api_type
+            == GuiApiType::default_for_current_platform().expect("Unsupported platform")
+            && !configuration.is_floating
+    }
+
+    fn get_preferred_api(&mut self) -> Option<clack_extensions::gui::GuiConfiguration> {
+        Some(GuiConfiguration {
+            api_type: GuiApiType::default_for_current_platform().expect("Unsupported platform"),
+            is_floating: false,
+        })
+    }
+
+    fn create(
+        &mut self,
+        configuration: clack_extensions::gui::GuiConfiguration,
+    ) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    fn destroy(&mut self) {}
+
+    fn set_scale(&mut self, scale: f64) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    fn get_size(&mut self) -> Option<clack_extensions::gui::GuiSize> {
+        Some(clack_extensions::gui::GuiSize {
+            width: 400,
+            height: 200,
+        })
+    }
+
+    fn set_size(&mut self, size: clack_extensions::gui::GuiSize) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    fn set_parent(&mut self, window: clack_extensions::gui::Window) -> Result<(), PluginError> {
+        self.gui.parent = Some(window.raw_window_handle());
+        Ok(())
+    }
+
+    fn set_transient(&mut self, window: clack_extensions::gui::Window) -> Result<(), PluginError> {
+        Ok(())
+    }
+
+    fn show(&mut self) -> Result<(), PluginError> {
+        self.gui.open(&self.shared)?;
+        Ok(())
+    }
+
+    fn hide(&mut self) -> Result<(), PluginError> {
+        self.gui.close();
+        Ok(())
     }
 }
 

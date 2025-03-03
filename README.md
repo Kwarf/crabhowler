@@ -14,3 +14,5 @@ order to create a "proper" ADSR envelope to fix clicking noises heard in the
 first part. I also extend it to support 16 simultaneous voices, making it a
 _polyphonic_ synth. Still no custom GUI, but the DAW is nice enough to provide
 one for us for the parameters we expose.
+- [Writing a CLAP synthesizer in Rust (Part 3)](https://kwarf.com/2025/03/writing-a-clap-synthesizer-in-rust-part-3/)
+This added a custom GUI using [egui](egui.rs).

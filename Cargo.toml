@@ -8,7 +8,10 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-clack-extensions = { git = "https://github.com/prokopyl/clack.git", version = "0.1.0", features = ["audio-ports", "clack-plugin", "note-ports", "params", "state"] }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "9a0b42c09d712777b2edb4c5e0cb6baf21e988f0", version = "0.1.0" }
+clack-extensions = { git = "https://github.com/prokopyl/clack.git", version = "0.1.0", features = ["audio-ports", "clack-plugin", "gui", "note-ports", "params", "raw-window-handle_05", "state"] }
 clack-plugin = { git = "https://github.com/prokopyl/clack.git", version = "0.1.0" }
+egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", version = "0.5.0" }
+raw-window-handle = "0.5.2"
 
 [package.metadata.bundle]
