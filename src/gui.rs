@@ -1,5 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::sync::{atomic::Ordering, Arc};
 
+use atomic_float::AtomicF32;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use clack_plugin::plugin::PluginError;
 use egui_baseview::{
@@ -48,16 +49,14 @@ impl CrabHowlerGui {
             settings,
             GraphicsConfig::default(),
             state.envelope.clone(),
-            |_egui_ctx: &Context, _queue: &mut Queue, _state: &mut Arc<RwLock<Envelope>>| {},
-            |egui_ctx: &Context, _queue: &mut Queue, state: &mut Arc<RwLock<Envelope>>| {
-                let mut envelope = state.write().unwrap();
-
+            |_egui_ctx: &Context, _queue: &mut Queue, _state: &mut Arc<Envelope>| {},
+            |egui_ctx: &Context, _queue: &mut Queue, state: &mut Arc<Envelope>| {
                 egui::CentralPanel::default().show(egui_ctx, |ui| {
                     ui.heading("Crab Howler");
-                    ui.add(Slider::new(&mut envelope.attack, 0.0..=1.0).text("Attack"));
-                    ui.add(Slider::new(&mut envelope.decay, 0.0..=1.0).text("Decay"));
-                    ui.add(Slider::new(&mut envelope.sustain, 0.0..=1.0).text("Sustain"));
-                    ui.add(Slider::new(&mut envelope.release, 0.0..=1.0).text("Release"));
+                    Self::slider(ui, &state.attack, "Attack");
+                    Self::slider(ui, &state.decay, "Decay");
+                    Self::slider(ui, &state.sustain, "Sustain");
+                    Self::slider(ui, &state.release, "Release");
                 });
             },
         ));
@@ -69,6 +68,16 @@ impl CrabHowlerGui {
         if let Some(handle) = self.handle.as_mut() {
             handle.close();
             self.handle = None;
+        }
+    }
+
+    fn slider(ui: &mut egui::Ui, property: &AtomicF32, name: impl Into<egui::WidgetText>) {
+        let mut value = property.load(Ordering::Relaxed);
+        if ui
+            .add(Slider::new(&mut value, 0.0..=1.0).text(name))
+            .changed()
+        {
+            property.store(value, Ordering::Relaxed);
         }
     }
 }

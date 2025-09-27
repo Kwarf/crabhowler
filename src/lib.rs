@@ -34,7 +34,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::{
     ffi::CStr,
     io::{Read, Write},
-    sync::{Arc, RwLock},
+    sync::{atomic::Ordering, Arc},
 };
 
 mod adsr;
@@ -135,18 +135,12 @@ impl<'a> PluginAudioProcessor<'a, CrabHowlerShared, CrabHowlerMainThread<'a>>
             for event in batch.events() {
                 match event.as_core_event() {
                     Some(CoreEventSpace::NoteOn(event)) => {
-                        let envelope = self.shared.envelope.read().or(Err(
-                            PluginError::Message("Failed to acquire parameter read lock"),
-                        ))?;
-                        self.osc.handle_note_on(&envelope, event)
+                        self.osc.handle_note_on(&self.shared.envelope, event)
                     }
                     Some(CoreEventSpace::NoteOff(event)) => self.osc.handle_note_off(event),
-                    Some(CoreEventSpace::ParamValue(event)) => self
-                        .shared
-                        .envelope
-                        .write()
-                        .expect("Failed to acquire parameter write lock")
-                        .handle_event(event),
+                    Some(CoreEventSpace::ParamValue(event)) => {
+                        self.shared.envelope.handle_event(event)
+                    }
                     _ => {}
                 }
             }
@@ -175,11 +169,7 @@ impl<'a> PluginAudioProcessorParams for CrabHowlerAudioProcessor<'a> {
     ) {
         for event in input_parameter_changes {
             if let Some(CoreEventSpace::ParamValue(event)) = event.as_core_event() {
-                self.shared
-                    .envelope
-                    .write()
-                    .expect("Failed to acquire parameter write lock")
-                    .handle_event(event);
+                self.shared.envelope.handle_event(event);
             }
         }
     }
@@ -187,7 +177,7 @@ impl<'a> PluginAudioProcessorParams for CrabHowlerAudioProcessor<'a> {
 
 #[derive(Default)]
 pub struct CrabHowlerShared {
-    envelope: Arc<RwLock<Envelope>>,
+    envelope: Arc<Envelope>,
 }
 
 impl<'a> PluginShared<'a> for CrabHowlerShared {}
@@ -218,18 +208,18 @@ impl<'a> PluginMainThreadParams for CrabHowlerMainThread<'a> {
                 module: b"",
                 min_value: 0.0,
                 max_value: 1.0,
-                default_value: default as f64,
+                default_value: default.load(Ordering::Relaxed) as f64,
             });
         }
     }
 
     fn get_value(&mut self, param_id: ClapId) -> Option<f64> {
-        let envelope = self.shared.envelope.read().ok()?;
+        let envelope = &self.shared.envelope;
         match param_id.into() {
-            0 => Some(envelope.attack as f64),
-            1 => Some(envelope.decay as f64),
-            2 => Some(envelope.sustain as f64),
-            3 => Some(envelope.release as f64),
+            0 => Some(envelope.attack.load(Ordering::Relaxed) as f64),
+            1 => Some(envelope.decay.load(Ordering::Relaxed) as f64),
+            2 => Some(envelope.sustain.load(Ordering::Relaxed) as f64),
+            3 => Some(envelope.release.load(Ordering::Relaxed) as f64),
             _ => None,
         }
     }
@@ -264,11 +254,7 @@ impl<'a> PluginMainThreadParams for CrabHowlerMainThread<'a> {
     ) {
         for event in input_parameter_changes {
             if let Some(CoreEventSpace::ParamValue(event)) = event.as_core_event() {
-                self.shared
-                    .envelope
-                    .write()
-                    .expect("Failed to acquire parameter write lock")
-                    .handle_event(event);
+                self.shared.envelope.handle_event(event);
             }
         }
     }
@@ -276,29 +262,33 @@ impl<'a> PluginMainThreadParams for CrabHowlerMainThread<'a> {
 
 impl<'a> PluginStateImpl for CrabHowlerMainThread<'a> {
     fn save(&mut self, output: &mut OutputStream) -> Result<(), PluginError> {
-        let envelope = self.shared.envelope.read().or(Err(PluginError::Message(
-            "Failed to acquire parameter read lock",
-        )))?;
-        output.write_all(&envelope.attack.to_le_bytes())?;
-        output.write_all(&envelope.decay.to_le_bytes())?;
-        output.write_all(&envelope.sustain.to_le_bytes())?;
-        output.write_all(&envelope.release.to_le_bytes())?;
+        let envelope = &self.shared.envelope;
+        output.write_all(&envelope.attack.load(Ordering::Relaxed).to_le_bytes())?;
+        output.write_all(&envelope.decay.load(Ordering::Relaxed).to_le_bytes())?;
+        output.write_all(&envelope.sustain.load(Ordering::Relaxed).to_le_bytes())?;
+        output.write_all(&envelope.release.load(Ordering::Relaxed).to_le_bytes())?;
         Ok(())
     }
 
     fn load(&mut self, input: &mut InputStream) -> Result<(), PluginError> {
-        let mut envelope = self.shared.envelope.write().or(Err(PluginError::Message(
-            "Failed to acquire parameter write lock",
-        )))?;
+        let envelope = &self.shared.envelope;
         let mut buf = [0; 4];
         input.read_exact(&mut buf)?;
-        envelope.attack = f32::from_le_bytes(buf);
+        envelope
+            .attack
+            .store(f32::from_le_bytes(buf), Ordering::Relaxed);
         input.read_exact(&mut buf)?;
-        envelope.decay = f32::from_le_bytes(buf);
+        envelope
+            .decay
+            .store(f32::from_le_bytes(buf), Ordering::Relaxed);
         input.read_exact(&mut buf)?;
-        envelope.sustain = f32::from_le_bytes(buf);
+        envelope
+            .sustain
+            .store(f32::from_le_bytes(buf), Ordering::Relaxed);
         input.read_exact(&mut buf)?;
-        envelope.release = f32::from_le_bytes(buf);
+        envelope
+            .release
+            .store(f32::from_le_bytes(buf), Ordering::Relaxed);
         Ok(())
     }
 }
