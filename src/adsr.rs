@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use crate::envelope::Envelope;
 
 #[derive(PartialEq)]
@@ -29,7 +31,7 @@ impl ADSR {
     pub fn process(&mut self, sample_rate: f32) -> f32 {
         match self.state {
             ADSRState::Attack(sample) => {
-                let attack_samples = self.envelope.attack * sample_rate;
+                let attack_samples = self.envelope.attack.load(Ordering::Relaxed) * sample_rate;
                 self.state = if sample >= attack_samples {
                     ADSRState::Decay(0.0)
                 } else {
@@ -38,24 +40,25 @@ impl ADSR {
                 sample / attack_samples
             }
             ADSRState::Decay(sample) => {
-                let decay_samples = self.envelope.decay * sample_rate;
+                let decay_samples = self.envelope.decay.load(Ordering::Relaxed) * sample_rate;
                 self.state = if sample >= decay_samples {
                     ADSRState::Sustain
                 } else {
                     ADSRState::Decay(sample + 1.0)
                 };
-                1.0 - (1.0 - self.envelope.sustain) * (sample / decay_samples)
+                1.0 - (1.0 - self.envelope.sustain.load(Ordering::Relaxed))
+                    * (sample / decay_samples)
             }
-            ADSRState::Sustain => self.envelope.sustain,
+            ADSRState::Sustain => self.envelope.sustain.load(Ordering::Relaxed),
             ADSRState::Release(sample) => {
-                let release_samples = self.envelope.release * sample_rate;
+                let release_samples = self.envelope.release.load(Ordering::Relaxed) * sample_rate;
                 self.state = ADSRState::Release(sample + 1.0);
                 self.state = if sample >= release_samples {
                     ADSRState::Ended
                 } else {
                     ADSRState::Release(sample + 1.0)
                 };
-                self.envelope.sustain * (1.0 - sample / release_samples)
+                self.envelope.sustain.load(Ordering::Relaxed) * (1.0 - sample / release_samples)
             }
             ADSRState::Ended => 0.0,
         }
